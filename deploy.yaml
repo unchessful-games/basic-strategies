@@ -1,0 +1,99 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: unchessful
+  name: basic-strategies
+  labels:
+    app: basic-strategies
+
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: basic-strategies
+  template:
+    metadata:
+      labels:
+        app: basic-strategies
+    spec:
+      topologySpreadConstraints:
+      - whenUnsatisfiable: DoNotSchedule
+        topologyKey: kubernetes.io/hostname
+        labelSelector:
+          matchLabels:
+            app: basic-strategies
+        maxSkew: 1
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - nothing
+      # nodeSelector:
+      #   kubernetes.io/arch: amd64
+      containers:
+        - name: engine
+          image: registry.danya02.ru/unchessful/engines/basic-strategies:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: 32M
+              cpu: 100m
+            limits:
+              memory: 128M
+              cpu: 500m
+          ports:
+            - name: web
+              containerPort: 3000
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: unchessful
+  name: basic-strategies-svc
+
+spec:
+  ports:
+    - name: web
+      port: 80
+      targetPort: web
+
+  selector:
+    app: basic-strategies
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: basic-strategies-middleware
+  namespace: unchessful
+spec:
+  stripPrefix:
+    prefixes:
+      - "/basic-strategies"
+    forceSlash: false
+---
+# Traefik-specific ingress, can configure custom Traefik props
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: basic-strategies-ingressroute
+  namespace: unchessful
+spec:
+  tls:
+    domains:
+      - main: api.unchessful.games
+  entryPoints:
+    - websecure
+  routes:
+  - match: Host(`engines.unchessful.games`) && PathPrefix(`/basic-strategies`)
+    kind: Rule
+    services:
+      - name: basic-strategies-svc
+        port: web
+    middlewares:
+      - name: basic-strategies-middleware
