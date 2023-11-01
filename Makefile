@@ -1,6 +1,10 @@
 all: build deploy
 
 build:
+	mkdir -p target-x86_64
+	mkdir -p target-aarch64
+	cargo build --release --target x86_64-unknown-linux-musl --target-dir target-x86_64 --features server
+	cross build --release --target aarch64-unknown-linux-musl --target-dir target-aarch64 --features server
 	docker buildx build --platform linux/amd64,linux/arm64/v8 . --tag registry.danya02.ru/unchessful/engines/basic-strategies:latest --builder local --push
 
 deploy:
